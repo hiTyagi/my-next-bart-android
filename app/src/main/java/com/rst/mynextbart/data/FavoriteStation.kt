@@ -10,5 +10,9 @@ data class FavoriteStation(
     @SerialName("name")
     val name: String,
     @SerialName("is_pinned")
-    val isPinned: Boolean = false
+    val isPinned: Boolean = false,
+    @SerialName("added_at")
+    val addedAt: Long = System.currentTimeMillis(),
+    @SerialName("pinned_at")
+    val pinnedAt: Long? = null
 ) 

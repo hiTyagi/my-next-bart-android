@@ -171,10 +171,16 @@ fun FavoriteRoutesScreen(viewModel: BartViewModel) {
                     Text("No favorite routes yet")
                 }
             } else {
+                // Sort favorite routes by addedAt timestamp (most recently added first)
+                val sortedRoutes = viewModel.favoriteRoutes.sortedByDescending { it.addedAt }
+                
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(viewModel.favoriteRoutes) { route ->
+                    items(
+                        items = sortedRoutes,
+                        key = { "${it.fromStation}_${it.toStation}" }
+                    ) { route ->
                         FavoriteRouteItem(
                             route = route,
                             onDelete = { routeToDelete = route },

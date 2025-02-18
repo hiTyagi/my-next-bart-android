@@ -80,22 +80,53 @@ class FavoritesDataStore(private val context: Context) {
             }
         }
 
+    val pinnedStations: Flow<Set<String>> = context.dataStore.data
+        .catch { exception ->
+            Log.e("FavoritesDataStore", "Error reading pinned stations", exception)
+            emit(emptyPreferences())
+        }
+        .map { preferences ->
+            preferences[pinnedStationsKey] ?: emptySet()
+        }
+
     suspend fun toggleStationPin(station: FavoriteStation) {
         try {
             context.dataStore.edit { preferences ->
+                // Get current pinned stations set
                 val pinnedStations = preferences[pinnedStationsKey] ?: emptySet()
                 
-                if (station.isPinned) {
-                    // Remove from pinned
-                    preferences[pinnedStationsKey] = pinnedStations - station.code
+                // Update pinned stations set based on the new pin state
+                preferences[pinnedStationsKey] = if (station.isPinned) {
+                    // If station is being pinned, add to pinned set
+                    pinnedStations + station.code
                 } else {
-                    // Add to pinned
-                    preferences[pinnedStationsKey] = pinnedStations + station.code
+                    // If station is being unpinned, remove from pinned set
+                    pinnedStations - station.code
                 }
+
+                // Update the station in favorites
+                val currentFavorites = preferences[favoritesKey]?.toMutableSet() ?: mutableSetOf()
+                
+                // Remove old version of the station
+                currentFavorites.removeAll { 
+                    try {
+                        json.decodeFromString<FavoriteStation>(it).code == station.code
+                    } catch (e: Exception) {
+                        false
+                    }
+                }
+                
+                // Add updated station
+                currentFavorites.add(json.encodeToString(station))
+                preferences[favoritesKey] = currentFavorites
+
+                Log.d("FavoritesDataStore", "Updated pinned stations: ${preferences[pinnedStationsKey]}")
+                Log.d("FavoritesDataStore", "Updated favorites: ${preferences[favoritesKey]}")
             }
-            Log.d("FavoritesDataStore", "Station pin toggled successfully: ${station.code}")
+            Log.d("FavoritesDataStore", "Station pin toggled successfully: ${station.name}, isPinned: ${station.isPinned}")
         } catch (e: Exception) {
             Log.e("FavoritesDataStore", "Error toggling station pin", e)
+            throw e
         }
     }
 

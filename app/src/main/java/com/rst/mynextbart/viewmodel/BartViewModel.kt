@@ -70,6 +70,10 @@ class BartViewModel(
     var lastStationRefreshTime by mutableStateOf(0L)
         private set
     
+    // Add state for pinned stations
+    private var _pinnedStations = mutableStateOf<Set<String>>(emptySet())
+    val pinnedStations: Set<String> by _pinnedStations
+    
     init {
         fetchDepartures(selectedStation.first)
         viewModelScope.launch {
@@ -90,6 +94,12 @@ class BartViewModel(
                 routes.filter { it.isPinned }.forEach { route ->
                     fetchRouteDetails(route)
                 }
+            }
+        }
+        // Collect pinned stations
+        viewModelScope.launch {
+            favoritesDataStore.pinnedStations.collect { stations ->
+                _pinnedStations.value = stations
             }
         }
     }
@@ -151,8 +161,11 @@ class BartViewModel(
     
     fun togglePinRoute(route: FavoriteRoute) {
         viewModelScope.launch {
+            val updatedRoute = route.copy(
+                isPinned = !route.isPinned,
+                pinnedAt = if (!route.isPinned) System.currentTimeMillis() else null
+            )
             favoritesDataStore.removeFavoriteRoute(route)
-            val updatedRoute = route.copy(isPinned = !route.isPinned)
             favoritesDataStore.addFavoriteRoute(updatedRoute)
             
             // If we're pinning the route, fetch its details immediately
@@ -171,20 +184,36 @@ class BartViewModel(
     
     fun toggleStationPin(station: FavoriteStation) {
         viewModelScope.launch {
-            Log.d("BartViewModel", "Toggling pin for station: ${station.name}")
-            favoritesDataStore.toggleStationPin(station)
-            
-            // If we're pinning the station, fetch its departures immediately
-            if (!station.isPinned) {
-                Log.d("BartViewModel", "Station was unpinned, fetching departures after pin")
-                fetchStationDepartures(station.copy(isPinned = true))
-            } else {
-                // If we're unpinning, remove from departures
-                Log.d("BartViewModel", "Station was pinned, removing departures after unpin")
-                stationDepartures = stationDepartures.toMutableMap().apply {
-                    remove(station.code)
+            try {
+                val updatedStation = station.copy(
+                    isPinned = !station.isPinned,
+                    pinnedAt = if (!station.isPinned) System.currentTimeMillis() else null
+                )
+                
+                Log.d("BartViewModel", "Toggling pin for station: ${updatedStation.name}, isPinned: ${updatedStation.isPinned}")
+                favoritesDataStore.toggleStationPin(updatedStation)
+                
+                // Update local state immediately
+                _pinnedStations.value = if (updatedStation.isPinned) {
+                    _pinnedStations.value + updatedStation.code
+                } else {
+                    _pinnedStations.value - updatedStation.code
                 }
-                stationDeparturesState = stationDepartures
+
+                if (updatedStation.isPinned) {
+                    // If we're pinning the station, fetch its departures immediately
+                    Log.d("BartViewModel", "Station was pinned, fetching departures")
+                    fetchStationDepartures(updatedStation)
+                } else {
+                    // If we're unpinning, remove from departures
+                    Log.d("BartViewModel", "Station was unpinned, removing departures")
+                    stationDepartures = stationDepartures.toMutableMap().apply {
+                        remove(updatedStation.code)
+                    }
+                    stationDeparturesState = stationDepartures
+                }
+            } catch (e: Exception) {
+                Log.e("BartViewModel", "Error toggling station pin", e)
             }
         }
     }
@@ -219,7 +248,7 @@ class BartViewModel(
                 val response = repository.getDepartures(route.fromStation)
                 
                 val filteredDepartures = response.root.station.firstOrNull()?.let { station ->
-                    val relevantEtds = station.etd.filter { etd ->
+                    val relevantEtds = station.etd?.filter { etd ->
                         // Get the destination station code
                         val destinationCode = repository.stations.find { (_, name) ->
                             name.trim().equals(etd.destination.trim(), ignoreCase = true)
@@ -259,7 +288,7 @@ class BartViewModel(
                         }
                     }
 
-                    if (relevantEtds.isNotEmpty()) {
+                    if (relevantEtds!!.isNotEmpty()) {
                         BartApiResponse(
                             root = Root(
                                 station = listOf(
@@ -296,32 +325,29 @@ class BartViewModel(
 
     // Update fetchStationDepartures with more logging
     fun fetchStationDepartures(station: FavoriteStation) {
-        if (!station.isPinned) {
-            Log.d("BartViewModel", "Skipping fetch for unpinned station: ${station.name}")
-            return
-        }
-
         viewModelScope.launch {
-            _lastStationRefreshTime = System.currentTimeMillis()
-            lastStationRefreshTime = _lastStationRefreshTime
             Log.d("BartViewModel", "Starting fetch for station: ${station.name}")
             
             stationDepartures = stationDepartures.toMutableMap().apply {
                 put(station.code, DeparturesState.Loading)
             }
             stationDeparturesState = stationDepartures
-            Log.d("BartViewModel", "Set loading state for station: ${station.code}")
-
+            
             try {
-                Log.d("BartViewModel", "Fetching departures for station: ${station.code}")
                 val response = repository.getDepartures(station.code)
-                Log.d("BartViewModel", "Got response for station ${station.code}: ${response.root.station.firstOrNull()?.etd?.size ?: 0} departures")
                 
-                stationDepartures = stationDepartures.toMutableMap().apply {
-                    put(station.code, DeparturesState.Success(response))
+                // Check if there are any trains scheduled
+                if (response.root.station.firstOrNull()?.etd == null) {
+                    stationDepartures = stationDepartures.toMutableMap().apply {
+                        put(station.code, DeparturesState.Error("No trains currently scheduled"))
+                    }
+                } else {
+                    stationDepartures = stationDepartures.toMutableMap().apply {
+                        put(station.code, DeparturesState.Success(response))
+                    }
                 }
                 stationDeparturesState = stationDepartures
-                Log.d("BartViewModel", "Updated departures state for station: ${station.code}")
+                
             } catch (e: Exception) {
                 Log.e("BartViewModel", "Error fetching departures for station ${station.code}", e)
                 stationDepartures = stationDepartures.toMutableMap().apply {

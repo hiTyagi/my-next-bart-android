@@ -35,13 +35,19 @@ fun FavoritesScreen(
                 Text("No favorite stations yet")
             }
         } else {
+            // Sort favorites by addedAt timestamp (most recently added first)
+            val sortedFavorites = viewModel.favoriteStations.sortedByDescending { it.addedAt }
+            
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(viewModel.favoriteStations) { station ->
+                items(
+                    items = sortedFavorites,
+                    key = { it.code }
+                ) { station ->
                     FavoriteStationItem(
                         station = station,
                         onSelect = { onStationSelected(station.code, station.name) },
