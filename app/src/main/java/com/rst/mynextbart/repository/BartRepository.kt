@@ -14,6 +14,7 @@ import com.rst.mynextbart.network.Root
 import com.rst.mynextbart.data.FavoritesDataStore
 import com.rst.mynextbart.data.FavoriteStation
 import com.rst.mynextbart.network.BartService
+import com.rst.mynextbart.network.StationInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -161,5 +162,33 @@ class BartRepository @Inject constructor(
 
     suspend fun getPinnedStations(): List<FavoriteStation> {
         return favoritesDataStore.favoriteStations.first().filter { it.isPinned }
+    }
+
+    suspend fun getStationInfo(stationCode: String): StationInfo {
+        return bartService.getStationInfo(stationCode).root.stations.station
+    }
+
+    // Cache for station info
+    private val stationInfoCache = mutableMapOf<String, StationInfo>()
+
+    suspend fun getStationAddress(stationCode: String): String {
+        return try {
+            // Check cache first
+            val cachedInfo = stationInfoCache[stationCode]
+            if (cachedInfo != null) {
+                formatAddress(cachedInfo)
+            } else {
+                val stationInfo = getStationInfo(stationCode)
+                stationInfoCache[stationCode] = stationInfo
+                formatAddress(stationInfo)
+            }
+        } catch (e: Exception) {
+            Log.e("BartRepository", "Error fetching station info", e)
+            "Address not available"
+        }
+    }
+
+    private fun formatAddress(stationInfo: StationInfo): String {
+        return "${stationInfo.address}, ${stationInfo.city}, ${stationInfo.state} ${stationInfo.zipCode}"
     }
 } 

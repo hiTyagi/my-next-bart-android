@@ -21,6 +21,9 @@ import dagger.hilt.android.AndroidEntryPoint
 import android.content.res.Configuration
 import android.graphics.Color
 import android.text.Html
+import android.view.animation.AnimationUtils
+import android.widget.ImageButton
+import android.widget.Toast
 
 @AndroidEntryPoint
 class StationWidget : AppWidgetProvider() {
@@ -55,9 +58,17 @@ class StationWidget : AppWidgetProvider() {
                 AppWidgetManager.INVALID_APPWIDGET_ID)
             val appWidgetManager = AppWidgetManager.getInstance(context)
             
+            // Show toast using broadcast
+            context.sendBroadcast(Intent("com.rst.mynextbart.action.SHOW_TOAST")
+                .putExtra("message", "Refreshing station data..."))
+            
             val stationInfo = StationWidgetConfig.getWidgetStation(context, appWidgetId)
             if (stationInfo != null) {
-                updateWidget(context, appWidgetManager, appWidgetId, stationInfo, repository)
+                CoroutineScope(Dispatchers.Main).launch {
+                    updateWidget(context, appWidgetManager, appWidgetId, stationInfo, repository)
+                    context.sendBroadcast(Intent("com.rst.mynextbart.action.SHOW_TOAST")
+                        .putExtra("message", "Station data refreshed"))
+                }
             }
         }
     }
@@ -79,66 +90,58 @@ class StationWidget : AppWidgetProvider() {
                         WidgetTheme.DARK -> true
                     }
 
-                    val station = repository.stations.find { it.first == stationInfo.code }
-                    if (station == null) {
-                        updateWidgetError(context, appWidgetManager, appWidgetId, "Station not found")
-                        return@launch
-                    }
+                    val views = RemoteViews(context.packageName, R.layout.station_widget)
+                    
+                    // Set background and alpha
+                    views.setInt(R.id.widget_container, "setBackgroundResource",
+                        if (isDarkMode) R.drawable.widget_background_dark
+                        else R.drawable.widget_background_light)
+                    views.setFloat(R.id.widget_container, "setAlpha", stationInfo.appearance.backgroundAlpha)
 
-                    val views = RemoteViews(context.packageName, R.layout.station_widget).apply {
-                        setInt(R.id.widget_container, "setBackgroundResource",
-                            if (isDarkMode) R.drawable.widget_background_dark
-                            else R.drawable.widget_background_light)
+                    // Set text colors based on theme
+                    val textColor = if (isDarkMode) "#FFFFFF" else "#000000"
+                    val secondaryTextColor = if (isDarkMode) "#B3FFFFFF" else "#666666"
+
+                    views.setTextColor(R.id.station_name, Color.parseColor(textColor))
+                    views.setTextColor(R.id.departures_list, Color.parseColor(textColor))
+                    views.setTextColor(R.id.last_updated, Color.parseColor(secondaryTextColor))
+
+                    // Set station name
+                    views.setTextViewText(R.id.station_name, stationInfo.name)
+
+                    try {
+                        val response = repository.getDepartures(stationInfo.code)
                         
-                        // Set alpha
-                        setFloat(R.id.widget_container, "setAlpha", stationInfo.appearance.backgroundAlpha)
-
-                        // Set text colors based on theme
-                        val textColor = if (isDarkMode) "#FFFFFF" else "#000000"
-                        val secondaryTextColor = if (isDarkMode) "#B3FFFFFF" else "#666666"
-
-                        setTextColor(R.id.station_name, android.graphics.Color.parseColor(textColor))
-                        setTextColor(R.id.departures_list, android.graphics.Color.parseColor(textColor))
-                        setTextColor(R.id.last_updated, android.graphics.Color.parseColor(secondaryTextColor))
-
-                        setTextViewText(R.id.station_name, station.second)
-                        
-                        try {
-                            val departures = repository.getDepartures(stationInfo.code)
-                            val stationData = departures.root.station.firstOrNull()
-                            
-                            if (stationData?.etd != null && stationData.etd.isNotEmpty()) {
-                                val departuresList = stationData.etd
-                                    .groupBy { it.destination }
-                                    .toList()
-                                    .take(3)
-                                    .map { (destination, etds) ->
-                                        val times = etds.flatMap { etd ->
-                                            etd.estimate.take(2).map { estimate ->
-                                                "<font color='${estimate.hexColor}'>●</font> ${estimate.minutes} min"
-                                            }
+                        if (response.root.station.firstOrNull()?.etd != null && 
+                            response.root.station.first().etd!!.isNotEmpty()) {
+                            val departuresList = response.root.station.first().etd!!
+                                .groupBy { it.destination }
+                                .toList()
+                                .take(3)
+                                .map { (destination, etds) ->
+                                    val times = etds.flatMap { etd ->
+                                        etd.estimate.take(2).map { estimate ->
+                                            "<font color='${estimate.hexColor}'>●</font> ${estimate.minutes} min"
                                         }
-                                        .take(2)
-                                        .joinToString(", ")
-                                        
-                                        "<b>$destination</b>: $times"
                                     }
-                                    .joinToString("<br>")
-                                
-                                // Set text as HTML
-                                setTextViewText(R.id.departures_list, Html.fromHtml(departuresList, Html.FROM_HTML_MODE_COMPACT))
-                            } else {
-                                setTextViewText(R.id.departures_list, "No trains scheduled")
-                            }
-                        } catch (e: Exception) {
-                            Log.e("StationWidget", "Error fetching departures", e)
-                            setTextViewText(R.id.departures_list, "Unable to fetch departures")
+                                    .take(2)
+                                    .joinToString(", ")
+                                    
+                                    "<b>$destination</b>: $times"
+                                }
+                                .joinToString("<br>")
+                            
+                            views.setTextViewText(R.id.departures_list, 
+                                Html.fromHtml(departuresList, Html.FROM_HTML_MODE_COMPACT))
+                        } else {
+                            views.setTextViewText(R.id.departures_list, "No trains scheduled")
                         }
-                        
-                        setTextViewText(R.id.last_updated, 
+
+                        // Set last updated time
+                        views.setTextViewText(R.id.last_updated, 
                             "Updated: ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())}")
-                        
-                        // Set up refresh button click
+
+                        // Set up refresh button
                         val refreshIntent = Intent(context, StationWidget::class.java).apply {
                             action = "com.rst.mynextbart.action.REFRESH_WIDGET"
                             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
@@ -149,9 +152,10 @@ class StationWidget : AppWidgetProvider() {
                             refreshIntent,
                             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                         )
-                        setOnClickPendingIntent(R.id.refresh_button, refreshPendingIntent)
-                        
-                        // Set up widget click to open app
+                        views.setImageViewResource(R.id.refresh_button, R.drawable.ic_refresh)
+                        views.setOnClickPendingIntent(R.id.refresh_button, refreshPendingIntent)
+
+                        // Set up widget click
                         val openAppIntent = Intent(context, MainActivity::class.java).apply {
                             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                             putExtra("screen", "explore")
@@ -164,13 +168,16 @@ class StationWidget : AppWidgetProvider() {
                             openAppIntent,
                             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                         )
-                        setOnClickPendingIntent(R.id.widget_container, pendingIntent)
+                        views.setOnClickPendingIntent(R.id.widget_container, pendingIntent)
+
+                        appWidgetManager.updateAppWidget(appWidgetId, views)
+                    } catch (e: Exception) {
+                        Log.e("StationWidget", "Error updating widget", e)
+                        updateWidgetError(context, appWidgetManager, appWidgetId, "Unable to update widget")
                     }
-                    
-                    appWidgetManager.updateAppWidget(appWidgetId, views)
                 } catch (e: Exception) {
-                    Log.e("StationWidget", "Error updating widget", e)
-                    updateWidgetError(context, appWidgetManager, appWidgetId, "Unable to update widget")
+                    Log.e("StationWidget", "Error setting up widget", e)
+                    updateWidgetError(context, appWidgetManager, appWidgetId, "Unable to set up widget")
                 }
             }
         }
@@ -179,27 +186,12 @@ class StationWidget : AppWidgetProvider() {
             context: Context,
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int,
-            error: String?
+            error: String
         ) {
-            val isDarkMode = (context.resources.configuration.uiMode and 
-                Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-            
-            val views = RemoteViews(context.packageName, R.layout.station_widget).apply {
-                setInt(R.id.widget_container, "setBackgroundResource",
-                    if (isDarkMode) R.drawable.widget_background_dark
-                    else R.drawable.widget_background_light)
-
-                val textColor = if (isDarkMode) "#FFFFFF" else "#000000"
-                val errorColor = if (isDarkMode) "#FF5252" else "#B71C1C"
-
-                setTextColor(R.id.station_name, android.graphics.Color.parseColor(textColor))
-                setTextColor(R.id.departures_list, android.graphics.Color.parseColor(errorColor))
-                setTextColor(R.id.last_updated, android.graphics.Color.parseColor(textColor))
-
-                setTextViewText(R.id.station_name, "Error")
-                setTextViewText(R.id.departures_list, error ?: "Unknown error")
-                setTextViewText(R.id.last_updated, "")
-            }
+            val views = RemoteViews(context.packageName, R.layout.station_widget)
+            views.setTextViewText(R.id.station_name, "Error")
+            views.setTextViewText(R.id.departures_list, error)
+            views.setTextViewText(R.id.last_updated, "")
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }

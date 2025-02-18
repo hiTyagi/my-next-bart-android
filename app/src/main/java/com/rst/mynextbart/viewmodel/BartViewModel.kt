@@ -19,6 +19,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import androidx.compose.runtime.derivedStateOf
+import com.rst.mynextbart.network.StationInfo
 
 @HiltViewModel
 class BartViewModel @Inject constructor(
@@ -63,12 +65,10 @@ class BartViewModel @Inject constructor(
     var stationDeparturesState by mutableStateOf<Map<String, DeparturesState>>(emptyMap())
         private set
     
-    // Add these properties
-    private var _lastRouteRefreshTime by mutableStateOf(0L)
+    // Use simple mutableStateOf
     var lastRouteRefreshTime by mutableStateOf(0L)
         private set
-
-    private var _lastStationRefreshTime by mutableStateOf(0L)
+    
     var lastStationRefreshTime by mutableStateOf(0L)
         private set
     
@@ -131,13 +131,14 @@ class BartViewModel @Inject constructor(
         }
     }
     
-    private fun fetchDepartures(stationCode: String) {
+    fun fetchDepartures(stationCode: String) {
         viewModelScope.launch {
             departuresState = DeparturesState.Loading
             try {
                 val response = repository.getDepartures(stationCode)
                 departuresState = DeparturesState.Success(response)
             } catch (e: Exception) {
+                Log.e("BartViewModel", "Error fetching departures", e)
                 departuresState = DeparturesState.Error(e.message ?: "Unknown error occurred")
             }
         }
@@ -227,8 +228,7 @@ class BartViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            _lastRouteRefreshTime = System.currentTimeMillis()
-            lastRouteRefreshTime = _lastRouteRefreshTime
+            lastRouteRefreshTime = System.currentTimeMillis()
             val routeKey = "${route.fromStation}_${route.toStation}"
             Log.d("BartViewModel", "Starting fetch for route: $routeKey")
             
@@ -360,7 +360,7 @@ class BartViewModel @Inject constructor(
         }
     }
 
-    // Remove refreshPinnedItems since we want separate refreshes
+    // Update refresh functions
     fun refreshPinnedRoutes() {
         viewModelScope.launch {
             Log.d("BartViewModel", "Starting refresh of pinned routes")
@@ -371,6 +371,7 @@ class BartViewModel @Inject constructor(
                 Log.d("BartViewModel", "Fetching details for route: ${route.fromStationName} to ${route.toStationName}")
                 fetchRouteDetails(route)
             }
+            lastRouteRefreshTime = System.currentTimeMillis()
         }
     }
 
@@ -384,12 +385,12 @@ class BartViewModel @Inject constructor(
                 Log.d("BartViewModel", "Fetching departures for station: ${station.name}")
                 fetchStationDepartures(station)
             }
+            lastStationRefreshTime = System.currentTimeMillis()
         }
     }
 
-    fun getStationAddress(stationCode: String): String {
-        // TODO: Add station addresses to your data
-        return "123 Station Street, City, CA"  // Replace with actual address
+    suspend fun getStationAddress(stationCode: String): String {
+        return repository.getStationAddress(stationCode)
     }
     
     suspend fun getStationRouteColors(stationCode: String): List<String> {
@@ -420,6 +421,31 @@ class BartViewModel @Inject constructor(
 
     fun clearRouteFromStation() {
         routeFromStation = null
+    }
+
+    // Add this function to handle widget click navigation
+    fun handleWidgetNavigation(stationCode: String, stationName: String) {
+        selectedStation = stationCode to stationName
+        // Ensure we're in Loading state before fetching
+        departuresState = DeparturesState.Loading
+        viewModelScope.launch {
+            try {
+                val response = repository.getDepartures(stationCode)
+                departuresState = DeparturesState.Success(response)
+            } catch (e: Exception) {
+                Log.e("BartViewModel", "Error fetching departures during widget navigation", e)
+                departuresState = DeparturesState.Error(e.message ?: "Unknown error occurred")
+            }
+        }
+    }
+
+    suspend fun getStationInfo(stationCode: String): StationInfo? {
+        return try {
+            repository.getStationInfo(stationCode)
+        } catch (e: Exception) {
+            Log.e("BartViewModel", "Error fetching station info", e)
+            null
+        }
     }
 }
 

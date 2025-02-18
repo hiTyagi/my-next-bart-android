@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -22,6 +23,8 @@ import com.rst.mynextbart.ui.theme.MyNextBARTTheme
 import com.rst.mynextbart.viewmodel.BartViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -29,7 +32,21 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        
+        // Handle widget navigation
+        if (intent?.getStringExtra("screen") == "explore") {
+            val stationCode = intent.getStringExtra("station_code")
+            val stationName = intent.getStringExtra("station_name")
+            if (stationCode != null && stationName != null) {
+                // Use lifecycleScope to ensure the coroutine is bound to the activity's lifecycle
+                lifecycleScope.launch {
+                    viewModel.handleWidgetNavigation(stationCode, stationName)
+                    // Optional: Add a small delay to ensure the UI has time to update
+                    delay(100)
+                }
+            }
+        }
+        
         setContent {
             MyNextBARTTheme {
                 MainContent(
@@ -40,15 +57,6 @@ class MainActivity : ComponentActivity() {
                         NavDestination.Home.route
                     }
                 )
-            }
-        }
-
-        // Handle widget click after setting content
-        if (intent?.getStringExtra("screen") == "explore") {
-            val stationCode = intent.getStringExtra("station_code")
-            val stationName = intent.getStringExtra("station_name")
-            if (stationCode != null && stationName != null) {
-                viewModel.selectStation(stationCode, stationName)
             }
         }
     }

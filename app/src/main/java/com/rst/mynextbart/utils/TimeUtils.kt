@@ -16,9 +16,9 @@ object TimeUtils {
     }
 
     fun formatDepartureTime(minutes: String): String {
-        return when {
-            minutes == "Leaving" -> "Leaving now"
-            minutes == "1" -> "In 1 min"
+        return when (minutes) {
+            "Leaving" -> "Leaving now"
+            "1" -> "In 1 min"
             else -> "In $minutes mins"
         }
     }
