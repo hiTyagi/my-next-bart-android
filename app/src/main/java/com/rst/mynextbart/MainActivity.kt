@@ -29,9 +29,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
             MyNextBARTTheme {
-                MainContent(viewModel)
+                MainContent(
+                    viewModel = viewModel,
+                    startDestination = if (intent?.getStringExtra("screen") == "explore") {
+                        NavDestination.Explore.route
+                    } else {
+                        NavDestination.Home.route
+                    }
+                )
+            }
+        }
+
+        // Handle widget click after setting content
+        if (intent?.getStringExtra("screen") == "explore") {
+            val stationCode = intent.getStringExtra("station_code")
+            val stationName = intent.getStringExtra("station_name")
+            if (stationCode != null && stationName != null) {
+                viewModel.selectStation(stationCode, stationName)
             }
         }
     }
@@ -39,7 +56,10 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MainContent(viewModel: BartViewModel) {
+private fun MainContent(
+    viewModel: BartViewModel,
+    startDestination: String
+) {
     val navController = rememberNavController()
     
     Scaffold(
@@ -89,7 +109,7 @@ private fun MainContent(viewModel: BartViewModel) {
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = NavDestination.Home.route,
+            startDestination = startDestination,
             modifier = Modifier.padding(padding)
         ) {
             composable(NavDestination.Home.route) {
