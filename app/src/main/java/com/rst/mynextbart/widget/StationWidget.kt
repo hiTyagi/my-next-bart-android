@@ -19,6 +19,8 @@ import java.util.Locale
 import javax.inject.Inject
 import dagger.hilt.android.AndroidEntryPoint
 import android.content.res.Configuration
+import android.graphics.Color
+import android.text.Html
 
 @AndroidEntryPoint
 class StationWidget : AppWidgetProvider() {
@@ -42,6 +44,21 @@ class StationWidget : AppWidgetProvider() {
         // Clean up the preferences when widgets are deleted
         appWidgetIds.forEach { widgetId ->
             StationWidgetConfig.removeWidgetStation(context, widgetId)
+        }
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        
+        if (intent.action == "com.rst.mynextbart.action.REFRESH_WIDGET") {
+            val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, 
+                AppWidgetManager.INVALID_APPWIDGET_ID)
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            
+            val stationInfo = StationWidgetConfig.getWidgetStation(context, appWidgetId)
+            if (stationInfo != null) {
+                updateWidget(context, appWidgetManager, appWidgetId, stationInfo, repository)
+            }
         }
     }
 
@@ -91,10 +108,25 @@ class StationWidget : AppWidgetProvider() {
                             val stationData = departures.root.station.firstOrNull()
                             
                             if (stationData?.etd != null && stationData.etd.isNotEmpty()) {
-                                val departuresList = stationData.etd.take(3).joinToString("\n") { etd ->
-                                    "${etd.destination}: ${etd.estimate.first().minutes} min"
-                                }
-                                setTextViewText(R.id.departures_list, departuresList)
+                                val departuresList = stationData.etd
+                                    .groupBy { it.destination }
+                                    .toList()
+                                    .take(3)
+                                    .map { (destination, etds) ->
+                                        val times = etds.flatMap { etd ->
+                                            etd.estimate.take(2).map { estimate ->
+                                                "<font color='${estimate.hexColor}'>●</font> ${estimate.minutes} min"
+                                            }
+                                        }
+                                        .take(2)
+                                        .joinToString(", ")
+                                        
+                                        "<b>$destination</b>: $times"
+                                    }
+                                    .joinToString("<br>")
+                                
+                                // Set text as HTML
+                                setTextViewText(R.id.departures_list, Html.fromHtml(departuresList, Html.FROM_HTML_MODE_COMPACT))
                             } else {
                                 setTextViewText(R.id.departures_list, "No trains scheduled")
                             }
@@ -106,10 +138,30 @@ class StationWidget : AppWidgetProvider() {
                         setTextViewText(R.id.last_updated, 
                             "Updated: ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())}")
                         
+                        // Set up refresh button click
+                        val refreshIntent = Intent(context, StationWidget::class.java).apply {
+                            action = "com.rst.mynextbart.action.REFRESH_WIDGET"
+                            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                        }
+                        val refreshPendingIntent = PendingIntent.getBroadcast(
+                            context,
+                            appWidgetId,
+                            refreshIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        )
+                        setOnClickPendingIntent(R.id.refresh_button, refreshPendingIntent)
+                        
+                        // Set up widget click to open app
+                        val openAppIntent = Intent(context, MainActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            putExtra("screen", "explore")
+                            putExtra("station_code", stationInfo.code)
+                            putExtra("station_name", stationInfo.name)
+                        }
                         val pendingIntent = PendingIntent.getActivity(
                             context,
                             appWidgetId,
-                            Intent(context, MainActivity::class.java),
+                            openAppIntent,
                             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                         )
                         setOnClickPendingIntent(R.id.widget_container, pendingIntent)

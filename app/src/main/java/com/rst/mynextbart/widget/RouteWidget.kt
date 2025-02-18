@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.text.Html
 import android.util.Log
 import android.widget.RemoteViews
 import com.rst.mynextbart.MainActivity
@@ -23,6 +24,21 @@ import javax.inject.Inject
 class RouteWidget : AppWidgetProvider() {
     @Inject
     lateinit var repository: BartRepository
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        
+        if (intent.action == "com.rst.mynextbart.action.REFRESH_ROUTE_WIDGET") {
+            val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, 
+                AppWidgetManager.INVALID_APPWIDGET_ID)
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            
+            val routeInfo = RouteWidgetConfig.getWidgetRoute(context, appWidgetId)
+            if (routeInfo != null) {
+                updateWidget(context, appWidgetManager, appWidgetId, routeInfo, repository)
+            }
+        }
+    }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         CoroutineScope(Dispatchers.IO).launch {
@@ -103,12 +119,24 @@ class RouteWidget : AppWidgetProvider() {
                                                 destIndex > fromIndex && destIndex >= toIndex
                                         }
                                     }
+                                    .groupBy { it.destination }
+                                    .toList()
                                     .take(3)
-
-                                val departuresList = filteredDepartures.joinToString("\n") { etd ->
-                                    "${etd.destination}: ${etd.estimate.first().minutes} min"
-                                }
-                                setTextViewText(R.id.departures_list, departuresList)
+                                    .map { (destination, etds) ->
+                                        val times = etds.flatMap { etd ->
+                                            etd.estimate.take(2).map { estimate ->
+                                                "<font color='${estimate.hexColor}'>●</font> ${estimate.minutes} min"
+                                            }
+                                        }
+                                        .take(2)
+                                        .joinToString(", ")
+                                        
+                                        "<b>$destination</b>: $times"
+                                    }
+                                    .joinToString("<br>")
+                                
+                                // Set text as HTML
+                                setTextViewText(R.id.departures_list, Html.fromHtml(filteredDepartures, Html.FROM_HTML_MODE_COMPACT))
                             } else {
                                 setTextViewText(R.id.departures_list, "No trains scheduled")
                             }
@@ -117,22 +145,42 @@ class RouteWidget : AppWidgetProvider() {
                             setTextViewText(R.id.departures_list, "Unable to fetch departures")
                         }
 
-                        setTextViewText(R.id.last_updated,
-                            "Updated: ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())}")
+                        // Set up refresh button click
+                        val refreshIntent = Intent(context, RouteWidget::class.java).apply {
+                            action = "com.rst.mynextbart.action.REFRESH_ROUTE_WIDGET"
+                            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                        }
+                        val refreshPendingIntent = PendingIntent.getBroadcast(
+                            context,
+                            appWidgetId,
+                            refreshIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        )
+                        setOnClickPendingIntent(R.id.refresh_button, refreshPendingIntent)
 
+                        // Set up widget click to open app
+                        val openAppIntent = Intent(context, MainActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            putExtra("screen", "explore")
+                            putExtra("station_code", routeInfo.fromStation)
+                            putExtra("station_name", routeInfo.fromStationName)
+                        }
                         val pendingIntent = PendingIntent.getActivity(
                             context,
                             appWidgetId,
-                            Intent(context, MainActivity::class.java),
+                            openAppIntent,
                             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                         )
                         setOnClickPendingIntent(R.id.widget_container, pendingIntent)
+
+                        setTextViewText(R.id.last_updated,
+                            "Updated: ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())}")
                     }
 
                     appWidgetManager.updateAppWidget(appWidgetId, views)
                 } catch (e: Exception) {
                     Log.e("RouteWidget", "Error updating widget", e)
-                    updateWidgetError(context, appWidgetManager, appWidgetId, e.message)
+                    updateWidgetError(context, appWidgetManager, appWidgetId, "Unable to update widget")
                 }
             }
         }
