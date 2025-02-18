@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">MyNextBART</string>
+    <string name="station_widget_description">BART Station Departures</string>
+    <string name="route_widget_description">BART Route Departures</string>
 </resources>

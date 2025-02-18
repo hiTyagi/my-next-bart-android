@@ -17,15 +17,17 @@ import com.rst.mynextbart.network.Station
 import android.util.Log
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import javax.inject.Inject
+import dagger.hilt.android.lifecycle.HiltViewModel
 
-class BartViewModel(
-    private val favoritesDataStore: FavoritesDataStore
+@HiltViewModel
+class BartViewModel @Inject constructor(
+    private val favoritesDataStore: FavoritesDataStore,
+    internal val repository: BartRepository
 ) : ViewModel() {
-    private val repository = BartRepository()
-    
     val stations = repository.stations
     
-    var selectedStation by mutableStateOf(repository.stations.first())
+    var selectedStation by mutableStateOf(stations.first())
         private set
         
     var departuresState by mutableStateOf<DeparturesState>(DeparturesState.Loading)
@@ -75,28 +77,28 @@ class BartViewModel(
     val pinnedStations: Set<String> by _pinnedStations
     
     init {
+        // Initialize with the first station
         fetchDepartures(selectedStation.first)
+        
+        // Set up data collection
         viewModelScope.launch {
             favoritesDataStore.favoriteStations.collect { stations ->
-                Log.d("BartViewModel", "Received ${stations.size} favorite stations, ${stations.count { it.isPinned }} pinned")
                 favoriteStations = stations
-                // Refresh departures for pinned stations when the list changes
                 stations.filter { it.isPinned }.forEach { station ->
-                    Log.d("BartViewModel", "Auto-refreshing departures for pinned station: ${station.name}")
                     fetchStationDepartures(station)
                 }
             }
         }
+        
         viewModelScope.launch {
             favoritesDataStore.favoriteRoutes.collect { routes ->
                 favoriteRoutes = routes
-                // Refresh departures whenever routes change
                 routes.filter { it.isPinned }.forEach { route ->
                     fetchRouteDetails(route)
                 }
             }
         }
-        // Collect pinned stations
+        
         viewModelScope.launch {
             favoritesDataStore.pinnedStations.collect { stations ->
                 _pinnedStations.value = stations
@@ -418,17 +420,6 @@ class BartViewModel(
 
     fun clearRouteFromStation() {
         routeFromStation = null
-    }
-}
-
-// Create a factory for the ViewModel
-class BartViewModelFactory(private val favoritesDataStore: FavoritesDataStore) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(BartViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return BartViewModel(favoritesDataStore) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
 

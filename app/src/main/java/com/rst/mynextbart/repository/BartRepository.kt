@@ -1,6 +1,8 @@
 package com.rst.mynextbart.repository
 
+import android.content.Context
 import android.util.Log
+import com.rst.mynextbart.R
 import com.rst.mynextbart.network.BartApiResponse
 import com.rst.mynextbart.network.RetrofitClient
 import com.rst.mynextbart.network.Route
@@ -9,10 +11,19 @@ import com.rst.mynextbart.network.RoutesResponse
 import com.rst.mynextbart.network.RouteInfoResponse
 import com.rst.mynextbart.network.Station
 import com.rst.mynextbart.network.Root
+import com.rst.mynextbart.data.FavoritesDataStore
+import com.rst.mynextbart.data.FavoriteStation
+import com.rst.mynextbart.network.BartService
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlinx.coroutines.flow.first
 
-class BartRepository {
-    private val bartService = RetrofitClient.bartService
-    
+@Singleton
+class BartRepository @Inject constructor(
+    private val bartService: BartService,
+    private val favoritesDataStore: FavoritesDataStore,
+) {
     private var routeInfoCache = mutableMapOf<String, RouteDetails>()
     private var routesCache: List<RouteDetails>? = null
     
@@ -29,30 +40,12 @@ class BartRepository {
     )
     
     suspend fun getDepartures(stationCode: String): BartApiResponse {
-        try {
-            val response = bartService.getRealTimeEstimates(station = stationCode)
-            
-            // Check for API error message
-            if (response.root.message?.warning?.contains("No data matched your criteria") == true) {
-                // Return a valid response with null ETD
-                return BartApiResponse(
-                    root = Root(
-                        station = listOf(
-                            Station(
-                                name = stations.find { it.first == stationCode }?.second ?: stationCode,
-                                abbr = stationCode,
-                                etd = emptyList()
-                            )
-                        ),
-                        date = response.root.date,
-                        time = response.root.time
-                    )
-                )
-            }
-            
-            return response
+        return try {
+            bartService.getDepartures(
+                orig = stationCode,
+            )
         } catch (e: Exception) {
-            Log.e("BartRepository", "Error fetching departures", e)
+            Log.e("BartRepository", "Error fetching departures for station $stationCode", e)
             throw e
         }
     }
@@ -115,7 +108,7 @@ class BartRepository {
                 // Convert ROUTE XX format to just the number
                 val number = routeNumbers[routeId] ?: routeId.split(" ").lastOrNull() ?: routeId
                 Log.d("BartRepository", "Fetching route info for route number: $number")
-                bartService.getRouteInfo(route = number).root.routeWrapper.route
+                bartService.getRouteInfo(routeNumber = number).root.routeWrapper.route
             } catch (e: Exception) {
                 Log.e("BartRepository", "Error fetching route info for $routeId", e)
                 throw e
@@ -164,5 +157,9 @@ class BartRepository {
                 null
             }
         }
+    }
+
+    suspend fun getPinnedStations(): List<FavoriteStation> {
+        return favoritesDataStore.favoriteStations.first().filter { it.isPinned }
     }
 } 

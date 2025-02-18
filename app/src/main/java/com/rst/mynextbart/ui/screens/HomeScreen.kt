@@ -412,7 +412,7 @@ fun PinnedStationCard(
                 }
                 is DeparturesState.Error -> {
                     if (departures.message.contains("required etd missing") || 
-                        departures.message.contains("missing at $.root.station")) {
+                        departures.message.contains("\$.root")) {
                         Text(
                             text = "No trains currently scheduled",
                             style = MaterialTheme.typography.bodyMedium,
@@ -601,7 +601,7 @@ fun PinnedRouteCard(
                 }
                 is DeparturesState.Error -> {
                     if (departures.message.contains("required etd missing") || 
-                        departures.message.contains("missing at $.root.station")) {
+                        departures.message.contains("\$.root")) {
                         Text(
                             text = "No trains currently scheduled",
                             style = MaterialTheme.typography.bodyMedium,
