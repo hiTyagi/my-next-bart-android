@@ -26,19 +26,6 @@ class BartRepository @Inject constructor(
     private val favoritesDataStore: FavoritesDataStore,
 ) {
     private var routeInfoCache = mutableMapOf<String, RouteDetails>()
-    private var routesCache: List<RouteDetails>? = null
-    
-    // Add route number mapping
-    private val routeNumbers = mapOf(
-        "ROUTE 1" to "1", // Richmond - Millbrae
-        "ROUTE 2" to "2", // Millbrae/SFO - Antioch
-        "ROUTE 3" to "3", // Richmond - Berryessa/North San Jose
-        "ROUTE 4" to "4", // Berryessa/North San Jose - Millbrae
-        "ROUTE 5" to "5", // Dublin/Pleasanton - Daly City
-        "ROUTE 6" to "6", // Daly City - Dublin/Pleasanton
-        "ROUTE 7" to "7", // Millbrae - Daly City
-        "ROUTE 8" to "8"  // Daly City - Richmond
-    )
     
     suspend fun getDepartures(stationCode: String): BartApiResponse {
         return try {
@@ -103,15 +90,12 @@ class BartRepository @Inject constructor(
         }
     }
     
-    suspend fun getRouteInfo(routeId: String): RouteDetails {
-        return routeInfoCache.getOrPut(routeId) {
+    private suspend fun getRouteInfo(number: String): RouteDetails {
+        return routeInfoCache.getOrPut(number) {
             try {
-                // Convert ROUTE XX format to just the number
-                val number = routeNumbers[routeId] ?: routeId.split(" ").lastOrNull() ?: routeId
-                Log.d("BartRepository", "Fetching route info for route number: $number")
                 bartService.getRouteInfo(routeNumber = number).root.routeWrapper.route
             } catch (e: Exception) {
-                Log.e("BartRepository", "Error fetching route info for $routeId", e)
+                Log.e("BartRepository", "Error fetching route info for ROUTE $number", e)
                 throw e
             }
         }
@@ -127,7 +111,7 @@ class BartRepository @Inject constructor(
 
         return routes.mapNotNull { route ->
             try {
-                val routeInfo = getRouteInfo(route.routeId)
+                val routeInfo = getRouteInfo(route.number)
                 val stations = routeInfo.stations
                 
                 if (stations == null) {
