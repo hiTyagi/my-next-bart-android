@@ -76,6 +76,11 @@ class BartViewModel @Inject constructor(
     private var _pinnedStations = mutableStateOf<Set<String>>(emptySet())
     val pinnedStations: Set<String> by _pinnedStations
     
+    // Add this map of routes and their fares
+    private var routeFares = mutableMapOf<String, String>()
+    var routeFaresState by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+    
     init {
         // Initialize with the first station
         fetchDepartures(selectedStation.first)
@@ -96,6 +101,7 @@ class BartViewModel @Inject constructor(
                 routes.filter { it.isPinned }.forEach { route ->
                     fetchRouteDetails(route)
                 }
+                fetchAllRouteFares()
             }
         }
         
@@ -315,6 +321,13 @@ class BartViewModel @Inject constructor(
                 }
                 routeDeparturesState = routeDepartures
                 
+                // Fetch fare
+                val fare = getFare(route.fromStation, route.toStation)
+                routeFares = routeFares.toMutableMap().apply {
+                    put("${route.fromStation}_${route.toStation}", fare)
+                }
+                routeFaresState = routeFares
+                
             } catch (e: Exception) {
                 Log.e("BartViewModel", "Error fetching route details", e)
                 routeDepartures = routeDepartures.toMutableMap().apply {
@@ -445,6 +458,23 @@ class BartViewModel @Inject constructor(
         } catch (e: Exception) {
             Log.e("BartViewModel", "Error fetching station info", e)
             null
+        }
+    }
+
+    suspend fun getFare(origin: String, destination: String): String {
+        return repository.getFare(origin, destination)
+    }
+
+    // Add this function to fetch fares for all routes
+    fun fetchAllRouteFares() {
+        viewModelScope.launch {
+            favoriteRoutes.forEach { route ->
+                val fare = getFare(route.fromStation, route.toStation)
+                routeFares = routeFares.toMutableMap().apply {
+                    put("${route.fromStation}_${route.toStation}", fare)
+                }
+                routeFaresState = routeFares
+            }
         }
     }
 }

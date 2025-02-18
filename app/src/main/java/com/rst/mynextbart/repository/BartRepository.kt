@@ -191,4 +191,19 @@ class BartRepository @Inject constructor(
     private fun formatAddress(stationInfo: StationInfo): String {
         return "${stationInfo.address}, ${stationInfo.city}, ${stationInfo.state} ${stationInfo.zipCode}"
     }
+
+    private val fareCache = mutableMapOf<Pair<String, String>, String>()
+
+    suspend fun getFare(origin: String, destination: String): String {
+        val key = origin to destination
+        return fareCache[key] ?: try {
+            val response = bartService.getFare(origin, destination)
+            val fare = response.root.trip.fare
+            fareCache[key] = fare
+            fare
+        } catch (e: Exception) {
+            Log.e("BartRepository", "Error fetching fare", e)
+            "N/A"
+        }
+    }
 } 

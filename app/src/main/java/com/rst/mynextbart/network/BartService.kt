@@ -24,4 +24,10 @@ interface BartService {
 
     @GET("stn.aspx?cmd=stninfo&key=MW9S-E7SL-26DU-VV8V&json=y")
     suspend fun getStationInfo(@Query("orig") stationCode: String): StationInfoResponse
+
+    @GET("sched.aspx?cmd=fare&key=MW9S-E7SL-26DU-VV8V&json=y")
+    suspend fun getFare(
+        @Query("orig") origin: String,
+        @Query("dest") destination: String
+    ): FareResponse
 } 

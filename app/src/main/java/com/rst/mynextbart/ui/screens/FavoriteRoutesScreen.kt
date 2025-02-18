@@ -20,262 +20,241 @@ import androidx.compose.ui.unit.dp
 import com.rst.mynextbart.data.FavoriteRoute
 import com.rst.mynextbart.viewmodel.BartViewModel
 import com.rst.mynextbart.ui.components.CommonScreen
+import com.rst.mynextbart.ui.components.FavoriteRouteCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FavoriteRoutesScreen(viewModel: BartViewModel) {
-    CommonScreen {
-        var fromStationExpanded by remember { mutableStateOf(false) }
-        var toStationExpanded by remember { mutableStateOf(false) }
-        
-        // Get the pre-selected station if coming from Explore screen
-        var selectedFromStation by remember { 
-            mutableStateOf<Pair<String, String>?>(viewModel.getRouteFromStation())
-        }
-        var selectedToStation by remember { mutableStateOf<Pair<String, String>?>(null) }
-        var routeToDelete by remember { mutableStateOf<FavoriteRoute?>(null) }
-        val context = LocalContext.current
-        var routeRefreshTrigger by remember { mutableStateOf(0) }
+fun FavoriteRoutesScreen(
+    viewModel: BartViewModel,
+    modifier: Modifier = Modifier
+) {
+    var routeToDelete by remember { mutableStateOf<FavoriteRoute?>(null) }
+    val context = LocalContext.current
 
-        // Clear the routeFromStation when leaving the screen
-        DisposableEffect(Unit) {
-            onDispose {
-                viewModel.clearRouteFromStation()
-            }
-        }
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        RouteCreationForm(
+            viewModel = viewModel,
+            onRouteCreated = { /* Optional callback when route is created */ }
+        )
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Favorite Routes List
+        if (viewModel.favoriteRoutes.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                // First column with dropdowns
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // From Station Selector
-                    ExposedDropdownMenuBox(
-                        expanded = fromStationExpanded,
-                        onExpandedChange = { fromStationExpanded = !fromStationExpanded }
-                    ) {
-                        TextField(
-                            value = selectedFromStation?.second ?: "Select departure station",
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = fromStationExpanded) },
-                            modifier = Modifier
-                                .menuAnchor()
-                                .fillMaxWidth()
-                        )
-                        
-                        ExposedDropdownMenu(
-                            expanded = fromStationExpanded,
-                            onDismissRequest = { fromStationExpanded = false }
-                        ) {
-                            viewModel.stations.forEach { station ->
-                                DropdownMenuItem(
-                                    text = { Text(station.second) },
-                                    onClick = {
-                                        selectedFromStation = station
-                                        fromStationExpanded = false
-                                    }
-                                )
-                            }
+                Text("No favorite routes yet")
+            }
+        } else {
+            // Sort favorite routes by addedAt timestamp (most recently added first)
+            val sortedRoutes = viewModel.favoriteRoutes.sortedByDescending { it.addedAt }
+            
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(
+                    items = sortedRoutes,
+                    key = { "${it.fromStation}_${it.toStation}" }
+                ) { route ->
+                    FavoriteRouteCard(
+                        route = route,
+                        onDelete = { routeToDelete = route },
+                        fare = viewModel.routeFaresState[route.fromStation + "_" + route.toStation],
+                        onTogglePin = {
+                            viewModel.togglePinRoute(route)
+                            Toast.makeText(
+                                context,
+                                if (route.isPinned) "Route unpinned" else "Route pinned to home",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
-                    }
-
-                    // To Station Selector
-                    ExposedDropdownMenuBox(
-                        expanded = toStationExpanded,
-                        onExpandedChange = { toStationExpanded = !toStationExpanded }
-                    ) {
-                        TextField(
-                            value = selectedToStation?.second ?: "Select destination station",
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = toStationExpanded) },
-                            modifier = Modifier
-                                .menuAnchor()
-                                .fillMaxWidth()
-                        )
-                        
-                        ExposedDropdownMenu(
-                            expanded = toStationExpanded,
-                            onDismissRequest = { toStationExpanded = false }
-                        ) {
-                            viewModel.stations.forEach { station ->
-                                DropdownMenuItem(
-                                    text = { Text(station.second) },
-                                    onClick = {
-                                        selectedToStation = station
-                                        toStationExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Second column with swap button
-                IconButton(
-                    onClick = {
-                        val temp = selectedFromStation
-                        selectedFromStation = selectedToStation
-                        selectedToStation = temp
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SwapVert,
-                        contentDescription = "Swap stations"
                     )
                 }
             }
+        }
+    }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Add Route Button
-            Button(
-                onClick = {
-                    if (selectedFromStation != null && selectedToStation != null) {
-                        viewModel.addFavoriteRoute(selectedFromStation!!, selectedToStation!!)
-                        selectedFromStation = null
-                        selectedToStation = null
-                        Toast.makeText(context, "Route added to favorites", Toast.LENGTH_SHORT).show()
+    // Confirmation Dialog
+    if (routeToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { routeToDelete = null },
+            title = { Text("Remove Route") },
+            text = { Text("Are you sure you want to remove this route from favorites?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.removeFavoriteRoute(routeToDelete!!)
+                        Toast.makeText(context, "Route removed from favorites", Toast.LENGTH_SHORT).show()
+                        routeToDelete = null
                     }
-                },
-                enabled = selectedFromStation != null && selectedToStation != null,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(ButtonDefaults.IconSize)
-                )
-                Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
-                Text("Add Favorite Route")
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Favorite Routes List
-            if (viewModel.favoriteRoutes.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
                 ) {
-                    Text("No favorite routes yet")
+                    Text("Remove")
                 }
-            } else {
-                // Sort favorite routes by addedAt timestamp (most recently added first)
-                val sortedRoutes = viewModel.favoriteRoutes.sortedByDescending { it.addedAt }
-                
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(
-                        items = sortedRoutes,
-                        key = { "${it.fromStation}_${it.toStation}" }
-                    ) { route ->
-                        FavoriteRouteItem(
-                            route = route,
-                            onDelete = { routeToDelete = route },
-                            onTogglePin = {
-                                viewModel.togglePinRoute(route)
-                                Toast.makeText(
-                                    context,
-                                    if (route.isPinned) "Route unpinned" else "Route pinned to home",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        )
-                    }
+            },
+            dismissButton = {
+                TextButton(onClick = { routeToDelete = null }) {
+                    Text("Cancel")
                 }
             }
-        }
-
-        // Confirmation Dialog
-        if (routeToDelete != null) {
-            AlertDialog(
-                onDismissRequest = { routeToDelete = null },
-                title = { Text("Remove Route") },
-                text = { Text("Are you sure you want to remove this route from favorites?") },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            viewModel.removeFavoriteRoute(routeToDelete!!)
-                            Toast.makeText(context, "Route removed from favorites", Toast.LENGTH_SHORT).show()
-                            routeToDelete = null
-                        }
-                    ) {
-                        Text("Remove")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { routeToDelete = null }) {
-                        Text("Cancel")
-                    }
-                }
-            )
-        }
+        )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FavoriteRouteItem(
-    route: FavoriteRoute,
-    onDelete: () -> Unit,
-    onTogglePin: () -> Unit
+private fun RouteCreationForm(
+    viewModel: BartViewModel,
+    onRouteCreated: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.Start
-            ) {
-                Text(
-                    text = route.fromStationName,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Icon(
-                    imageVector = Icons.Default.ArrowDownward,
-                    contentDescription = "to",
-                    modifier = Modifier.padding(vertical = 4.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = route.toStationName,
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-            Row {
-                IconButton(onClick = onTogglePin) {
-                    Icon(
-                        imageVector = if (route.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-                        contentDescription = if (route.isPinned) "Unpin route" else "Pin route",
-                        tint = if (route.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Remove route"
-                    )
-                }
-            }
+    var selectedFromStation by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var selectedToStation by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var fromStationExpanded by remember { mutableStateOf(false) }
+    var toStationExpanded by remember { mutableStateOf(false) }
+    var fare by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+
+    // Fetch fare when both stations are selected
+    LaunchedEffect(selectedFromStation, selectedToStation) {
+        if (selectedFromStation != null && selectedToStation != null) {
+            fare = viewModel.getFare(selectedFromStation!!.first, selectedToStation!!.first)
+        } else {
+            fare = null
         }
     }
-} 
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // From Station Row with Swap Button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ExposedDropdownMenuBox(
+                expanded = fromStationExpanded,
+                onExpandedChange = { fromStationExpanded = it },
+                modifier = Modifier.weight(1f)
+            ) {
+                TextField(
+                    value = selectedFromStation?.second ?: "",
+                    onValueChange = {},
+                    readOnly = true,
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = fromStationExpanded) },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth(),
+                    label = { Text("From Station") }
+                )
+                ExposedDropdownMenu(
+                    expanded = fromStationExpanded,
+                    onDismissRequest = { fromStationExpanded = false }
+                ) {
+                    viewModel.stations.forEach { station ->
+                        DropdownMenuItem(
+                            text = { Text(station.second) },
+                            onClick = {
+                                selectedFromStation = station
+                                fromStationExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            IconButton(
+                onClick = {
+                    val temp = selectedFromStation
+                    selectedFromStation = selectedToStation
+                    selectedToStation = temp
+                },
+                modifier = Modifier.width(68.dp) // Fixed width to match fare area
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SwapVert,
+                    contentDescription = "Swap stations"
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // To Station Row with Fare
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ExposedDropdownMenuBox(
+                expanded = toStationExpanded,
+                onExpandedChange = { toStationExpanded = it },
+                modifier = Modifier.weight(1f)
+            ) {
+                TextField(
+                    value = selectedToStation?.second ?: "",
+                    onValueChange = {},
+                    readOnly = true,
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = toStationExpanded) },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth(),
+                    label = { Text("To Station") }
+                )
+                ExposedDropdownMenu(
+                    expanded = toStationExpanded,
+                    onDismissRequest = { toStationExpanded = false }
+                ) {
+                    viewModel.stations.forEach { station ->
+                        DropdownMenuItem(
+                            text = { Text(station.second) },
+                            onClick = {
+                                selectedToStation = station
+                                toStationExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier.width(68.dp), // Fixed width to match swap button
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "$${fare ?: "0.00"}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Add Route Button
+        Button(
+            onClick = {
+                if (selectedFromStation != null && selectedToStation != null) {
+                    viewModel.addFavoriteRoute(selectedFromStation!!, selectedToStation!!)
+                    selectedFromStation = null
+                    selectedToStation = null
+                    Toast.makeText(context, "Route added to favorites", Toast.LENGTH_SHORT).show()
+                    onRouteCreated()
+                }
+            },
+            enabled = selectedFromStation != null && selectedToStation != null,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+                modifier = Modifier.size(ButtonDefaults.IconSize)
+            )
+            Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
+            Text("Add Favorite Route")
+        }
+    }
+}
