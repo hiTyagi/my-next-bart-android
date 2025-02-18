@@ -12,26 +12,21 @@ data class BartApiResponse(
 data class Root(
     val station: List<Station>,
     val message: Message? = null,
-    val date: String? = null,
-    val time: String? = null
-)
-
-@JsonClass(generateAdapter = true)
-data class Message(
-    val warning: String? = null
+    @Json(name = "date") val date: String? = null,
+    @Json(name = "time") val time: String? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class Station(
-    val name: String,
-    val abbr: String? = null,
-    val etd: List<Etd>? = null  // Make etd nullable with default value
+    @Json(name = "name") val name: String,
+    @Json(name = "abbr") val abbr: String? = null,
+    @Json(name = "etd") val etd: List<Etd>? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class Etd(
-    val destination: String,
-    val estimate: List<Estimate>
+    @Json(name = "destination") val destination: String,
+    @Json(name = "estimate") val estimate: List<Estimate>
 )
 
 @JsonClass(generateAdapter = true)

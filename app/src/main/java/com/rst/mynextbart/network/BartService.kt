@@ -4,30 +4,21 @@ import retrofit2.http.GET
 import retrofit2.http.Query
 
 interface BartService {
-    companion object {
-        private const val API_KEY = "MW9S-E7SL-26DU-VV8V"
-    }
-
-    @GET("etd.aspx")
+    @GET("etd.aspx?cmd=etd&key=MW9S-E7SL-26DU-VV8V&json=y")
     suspend fun getRealTimeEstimates(
-        @Query("cmd") cmd: String = "etd",
-        @Query("orig") station: String,
-        @Query("json") json: String = "y",
-        @Query("key") key: String = API_KEY
+        @Query("orig") station: String
     ): BartApiResponse
 
-    @GET("route.aspx")
-    suspend fun getRoutes(
-        @Query("cmd") cmd: String = "routes",
-        @Query("json") json: String = "y",
-        @Query("key") key: String = API_KEY
-    ): RoutesResponse
-    
-    @GET("route.aspx")
+    @GET("route.aspx?cmd=routes&key=MW9S-E7SL-26DU-VV8V&json=y")
+    suspend fun getRoutes(): RoutesResponse
+
+    @GET("route.aspx?cmd=routeinfo&key=MW9S-E7SL-26DU-VV8V&json=y")
     suspend fun getRouteInfo(
-        @Query("cmd") cmd: String = "routeinfo",
-        @Query("route") route: String,
-        @Query("json") json: String = "y",
-        @Query("key") key: String = API_KEY
+        @Query("route") routeNumber: String
     ): RouteInfoResponse
+
+    @GET("etd.aspx?cmd=etd&key=MW9S-E7SL-26DU-VV8V&json=y")
+    suspend fun getDepartures(
+        @Query("orig") orig: String
+    ): BartApiResponse
 } 

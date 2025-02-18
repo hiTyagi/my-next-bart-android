@@ -254,7 +254,7 @@ fun ExploreScreen(
                 }
                 is DeparturesState.Error -> {
                     if (state.message.contains("required etd missing") || 
-                        state.message.contains("missing at $.root.station")) {
+                        state.message.contains("\$.root")) {
                         Text(
                             text = "No trains currently scheduled",
                             style = MaterialTheme.typography.bodyMedium,

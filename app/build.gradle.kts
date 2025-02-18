@@ -2,7 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("com.google.devtools.ksp") version "2.0.0-Beta4-1.0.17"
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
     id("org.jetbrains.kotlin.plugin.serialization") version "2.0.0"
 }
 
@@ -84,4 +85,15 @@ dependencies {
 
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
+
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+
+    // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // Hilt ViewModel
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 }
+
