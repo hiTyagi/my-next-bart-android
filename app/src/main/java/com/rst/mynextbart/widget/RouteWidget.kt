@@ -13,6 +13,7 @@ import android.widget.Toast
 import com.rst.mynextbart.MainActivity
 import com.rst.mynextbart.R
 import com.rst.mynextbart.repository.BartRepository
+import com.rst.mynextbart.utils.TimeUtils.formatDepartureTime
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -135,7 +136,7 @@ class RouteWidget : AppWidgetProvider() {
                                     .map { (destination, etds) ->
                                         val times = etds.flatMap { etd ->
                                             etd.estimate.take(2).map { estimate ->
-                                                "<font color='${estimate.hexColor}'>●</font> ${estimate.minutes} min"
+                                                "<font color='${estimate.hexColor}'>●</font> ${formatDepartureTime(estimate.minutes, true)}"
                                             }
                                         }
                                         .take(2)
