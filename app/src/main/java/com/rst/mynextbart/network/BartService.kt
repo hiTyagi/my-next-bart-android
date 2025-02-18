@@ -21,4 +21,7 @@ interface BartService {
     suspend fun getDepartures(
         @Query("orig") orig: String
     ): BartApiResponse
+
+    @GET("stn.aspx?cmd=stninfo&key=MW9S-E7SL-26DU-VV8V&json=y")
+    suspend fun getStationInfo(@Query("orig") stationCode: String): StationInfoResponse
 } 

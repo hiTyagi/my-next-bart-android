@@ -1,9 +1,12 @@
 package com.rst.mynextbart.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,6 +16,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.DirectionsBike
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,19 +29,32 @@ import com.rst.mynextbart.ui.components.DepartureItem
 import com.rst.mynextbart.viewmodel.BartViewModel
 import com.rst.mynextbart.viewmodel.DeparturesState
 import com.rst.mynextbart.network.Estimate
+import com.rst.mynextbart.network.StationInfo
 import com.rst.mynextbart.utils.ColorUtils
 import kotlinx.coroutines.launch
 import com.rst.mynextbart.ui.components.CommonScreen
+import com.rst.mynextbart.utils.TimeUtils
+import kotlinx.coroutines.delay
 
 @Composable
 fun StationDetailsCard(
     stationName: String,
-    stationAddress: String,
+    stationCode: String,
     routeColors: List<String>,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
-    onCreateRoute: () -> Unit
+    onCreateRoute: () -> Unit,
+    viewModel: BartViewModel
 ) {
+    val context = LocalContext.current
+    var address by remember { mutableStateOf("Loading address...") }
+    var stationInfo by remember { mutableStateOf<StationInfo?>(null) }
+    
+    LaunchedEffect(stationCode) {
+        stationInfo = viewModel.getStationInfo(stationCode)
+        address = stationInfo?.let { "${it.address}, ${it.city}, ${it.state} ${it.zipCode}" } ?: "Address not available"
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -67,11 +85,38 @@ fun StationDetailsCard(
                         text = stationName,
                         style = MaterialTheme.typography.titleMedium
                     )
-                    Text(
-                        text = stationAddress,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        modifier = Modifier.clickable {
+                            stationInfo?.let {
+                                try {
+                                    val gmmIntentUri = Uri.parse("google.navigation:q=${it.latitude},${it.longitude}")
+                                    val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                                    mapIntent.setPackage("com.google.android.apps.maps")
+                                    context.startActivity(mapIntent)
+                                } catch (e: Exception) {
+                                    // Fallback to browser if Google Maps isn't installed
+                                    val browserIntent = Intent(Intent.ACTION_VIEW, 
+                                        Uri.parse("https://www.google.com/maps/dir/?api=1&destination=${it.latitude},${it.longitude}")
+                                    )
+                                    context.startActivity(browserIntent)
+                                }
+                            }
+                        },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Place,
+                            contentDescription = "Location",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = address,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 Row {
                     IconButton(onClick = onToggleFavorite) {
@@ -96,7 +141,7 @@ fun StationDetailsCard(
             // Route colors
             if (routeColors.isNotEmpty()) {
                 Text(
-                    text = "Routes serving this station:",
+                    text = "Routes serving this routes:",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
@@ -119,6 +164,115 @@ fun StationDetailsCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun DepartureCard(
+    destination: String,
+    estimates: List<Estimate>,
+    routeColor: String
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Canvas(modifier = Modifier.size(12.dp)) {
+                        drawCircle(
+                            color = ColorUtils.parseHexColor(routeColor)
+                        )
+                    }
+                    Text(
+                        text = destination,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                Text(
+                    text = "Platform ${estimates.first().platform}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            estimates.take(3).forEach { estimate ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = TimeUtils.formatDepartureTime(estimate.minutes),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${estimate.length} cars",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "•",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (estimate.bikeFlag == "1") {
+                            Icon(
+                                imageVector = Icons.Default.DirectionsBike,
+                                contentDescription = "Bikes allowed",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
+            
+            if (estimates.size > 3) {
+                Text(
+                    text = "and ${estimates.size - 3} more...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlatformHeader(platform: String) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.small
+    ) {
+        Text(
+            text = "Platform $platform",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -188,7 +342,7 @@ fun ExploreScreen(
             // Station Details Card
             StationDetailsCard(
                 stationName = viewModel.selectedStation.second,
-                stationAddress = viewModel.getStationAddress(viewModel.selectedStation.first),
+                stationCode = viewModel.selectedStation.first,
                 routeColors = routeColors,
                 isFavorite = viewModel.favoriteStations.any { it.code == viewModel.selectedStation.first },
                 onToggleFavorite = { 
@@ -205,7 +359,8 @@ fun ExploreScreen(
                         viewModel.selectedStation.first,
                         viewModel.selectedStation.second
                     )
-                }
+                },
+                viewModel = viewModel
             )
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -234,17 +389,15 @@ fun ExploreScreen(
                         )
                     } else {
                         LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             validStations.forEach { station ->
                                 station.etd?.forEach { etd ->
-                                    items<Estimate>(
-                                        items = etd.estimate,
-                                        key = { estimate -> "${etd.destination}_${estimate.minutes}_${estimate.platform}" }
-                                    ) { estimate ->
-                                        DepartureItem(
+                                    item(key = "${etd.destination}_${etd.estimate.first().platform}") {
+                                        DepartureCard(
                                             destination = etd.destination,
-                                            estimate = estimate
+                                            estimates = etd.estimate,
+                                            routeColor = etd.estimate.first().hexColor
                                         )
                                     }
                                 }
@@ -273,4 +426,4 @@ fun ExploreScreen(
             }
         }
     }
-} 
+}

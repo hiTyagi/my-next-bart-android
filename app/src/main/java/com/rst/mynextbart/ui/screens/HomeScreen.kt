@@ -38,7 +38,9 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.ui.draw.rotate
 import com.rst.mynextbart.ui.components.CommonScreen
+import com.rst.mynextbart.ui.components.RotatingRefreshButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,34 +98,28 @@ fun HomeScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(16.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Pinned Routes section
+
                 if (pinnedRoutes.isNotEmpty()) {
-                    item { 
+                    item {
                         SectionHeader(
                             title = "Pinned Routes",
                             lastRefreshTime = viewModel.lastRouteRefreshTime,
-                            onRefresh = {
-                                viewModel.refreshPinnedRoutes()
+                            onRefresh = { 
                                 routeRefreshTrigger++
+                                viewModel.refreshPinnedRoutes() 
                             }
                         )
                     }
                     
-                    // Sort pinned routes by pinnedAt timestamp (most recently pinned first)
-                    val sortedPinnedRoutes = pinnedRoutes.sortedByDescending { it.pinnedAt }
-                    
-                    items(
-                        items = sortedPinnedRoutes,
-                        key = { route -> "${route.fromStation}_${route.toStation}" }
-                    ) { route ->
-                        val routeKey = "${route.fromStation}_${route.toStation}"
+                    items(pinnedRoutes) { route ->
                         PinnedRouteCard(
                             route = route,
-                            departures = viewModel.routeDeparturesState[routeKey],
+                            departures = viewModel.routeDeparturesState[route.fromStation + "_" + route.toStation],
                             onUnpin = {
                                 viewModel.togglePinRoute(route)
                                 Toast.makeText(context, "Route unpinned", Toast.LENGTH_SHORT).show()
@@ -133,29 +129,21 @@ fun HomeScreen(
                             }
                         )
                     }
-                    item { Spacer(modifier = Modifier.height(16.dp)) }
                 }
 
-                // Pinned Stations section
                 if (pinnedStations.isNotEmpty()) {
-                    item { 
+                    item {
                         SectionHeader(
                             title = "Pinned Stations",
                             lastRefreshTime = viewModel.lastStationRefreshTime,
                             onRefresh = {
+                                stationRefreshTrigger++
                                 viewModel.refreshPinnedStations()
-                                stationRefreshTrigger++ // Reset only station auto-refresh timer
                             }
                         )
                     }
-                    
-                    // Sort pinned stations by pinnedAt timestamp (most recently pinned first)
-                    val sortedPinnedStations = pinnedStations.sortedByDescending { it.pinnedAt }
-                    
-                    items(
-                        items = sortedPinnedStations,
-                        key = { station -> station.code }
-                    ) { station ->
+
+                    items(pinnedStations) { station ->
                         PinnedStationCard(
                             station = station,
                             departures = viewModel.stationDeparturesState[station.code] ?: DeparturesState.Loading,
@@ -168,8 +156,8 @@ fun HomeScreen(
                             }
                         )
                     }
-                    item { Spacer(modifier = Modifier.height(16.dp)) }
                 }
+
             }
         }
 
@@ -642,6 +630,7 @@ private fun SectionHeader(
     onRefresh: () -> Unit
 ) {
     var secondsAgo by remember { mutableStateOf(0) }
+    var isRefreshing by remember { mutableStateOf(false) }
 
     // Update the seconds ago every second
     LaunchedEffect(lastRefreshTime) {
@@ -651,51 +640,36 @@ private fun SectionHeader(
         }
     }
 
-    Surface(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        color = Color.Transparent
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium
+        )
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    shadow = Shadow(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                        offset = Offset(0f, 2f),
-                        blurRadius = 2f
-                    )
-                ),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (lastRefreshTime > 0) {
-                    Text(
-                        text = "${secondsAgo}s ago",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(
-                    onClick = onRefresh,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
+            if (lastRefreshTime > 0) {
+                Text(
+                    text = when {
+                        secondsAgo < 60 -> "$secondsAgo seconds ago"
+                        secondsAgo < 3600 -> "${secondsAgo / 60} minutes ago"
+                        else -> "${secondsAgo / 3600} hours ago"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
+            RotatingRefreshButton(
+                onClick = onRefresh,
+                isRefreshing = isRefreshing
+            )
         }
     }
 } 

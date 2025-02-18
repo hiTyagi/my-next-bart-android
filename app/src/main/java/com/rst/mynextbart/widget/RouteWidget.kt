@@ -9,6 +9,7 @@ import android.content.res.Configuration
 import android.text.Html
 import android.util.Log
 import android.widget.RemoteViews
+import android.widget.Toast
 import com.rst.mynextbart.MainActivity
 import com.rst.mynextbart.R
 import com.rst.mynextbart.repository.BartRepository
@@ -33,9 +34,18 @@ class RouteWidget : AppWidgetProvider() {
                 AppWidgetManager.INVALID_APPWIDGET_ID)
             val appWidgetManager = AppWidgetManager.getInstance(context)
             
+            // Use application context for Toast
+            val applicationContext = context.applicationContext
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                Toast.makeText(applicationContext, "Refreshing route data...", Toast.LENGTH_SHORT).show()
+            }
+            
             val routeInfo = RouteWidgetConfig.getWidgetRoute(context, appWidgetId)
             if (routeInfo != null) {
-                updateWidget(context, appWidgetManager, appWidgetId, routeInfo, repository)
+                CoroutineScope(Dispatchers.Main).launch {
+                    updateWidget(context, appWidgetManager, appWidgetId, routeInfo, repository)
+                    Toast.makeText(applicationContext, "Route data refreshed", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -145,7 +155,7 @@ class RouteWidget : AppWidgetProvider() {
                             setTextViewText(R.id.departures_list, "Unable to fetch departures")
                         }
 
-                        // Set up refresh button click
+                        // Set up refresh button
                         val refreshIntent = Intent(context, RouteWidget::class.java).apply {
                             action = "com.rst.mynextbart.action.REFRESH_ROUTE_WIDGET"
                             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
@@ -156,6 +166,7 @@ class RouteWidget : AppWidgetProvider() {
                             refreshIntent,
                             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                         )
+                        setImageViewResource(R.id.refresh_button, R.drawable.ic_refresh)
                         setOnClickPendingIntent(R.id.refresh_button, refreshPendingIntent)
 
                         // Set up widget click to open app
