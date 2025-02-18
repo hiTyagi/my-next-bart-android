@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import com.rst.mynextbart.ui.components.CommonScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,8 +112,12 @@ fun HomeScreen(
                             }
                         )
                     }
+                    
+                    // Sort pinned routes by pinnedAt timestamp (most recently pinned first)
+                    val sortedPinnedRoutes = pinnedRoutes.sortedByDescending { it.pinnedAt }
+                    
                     items(
-                        items = pinnedRoutes,
+                        items = sortedPinnedRoutes,
                         key = { route -> "${route.fromStation}_${route.toStation}" }
                     ) { route ->
                         val routeKey = "${route.fromStation}_${route.toStation}"
@@ -143,8 +148,12 @@ fun HomeScreen(
                             }
                         )
                     }
+                    
+                    // Sort pinned stations by pinnedAt timestamp (most recently pinned first)
+                    val sortedPinnedStations = pinnedStations.sortedByDescending { it.pinnedAt }
+                    
                     items(
-                        items = pinnedStations,
+                        items = sortedPinnedStations,
                         key = { station -> station.code }
                     ) { station ->
                         PinnedStationCard(
@@ -474,7 +483,7 @@ fun PinnedRouteCard(
                         style = MaterialTheme.typography.titleMedium
                     )
                     Icon(
-                        imageVector = Icons.Default.ArrowForward,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "to",
                         modifier = Modifier.size(16.dp)
                     )

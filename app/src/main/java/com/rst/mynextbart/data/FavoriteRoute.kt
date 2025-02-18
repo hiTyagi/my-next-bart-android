@@ -8,5 +8,7 @@ data class FavoriteRoute(
     val fromStationName: String,
     val toStation: String,
     val toStationName: String,
-    val isPinned: Boolean = false
+    val isPinned: Boolean = false,
+    val addedAt: Long = System.currentTimeMillis(),
+    val pinnedAt: Long? = null
 ) 

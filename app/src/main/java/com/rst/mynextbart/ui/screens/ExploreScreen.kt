@@ -237,7 +237,7 @@ fun ExploreScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             validStations.forEach { station ->
-                                station.etd.forEach { etd ->
+                                station.etd?.forEach { etd ->
                                     items<Estimate>(
                                         items = etd.estimate,
                                         key = { estimate -> "${etd.destination}_${estimate.minutes}_${estimate.platform}" }

@@ -7,6 +7,8 @@ import com.rst.mynextbart.network.Route
 import com.rst.mynextbart.network.RouteDetails
 import com.rst.mynextbart.network.RoutesResponse
 import com.rst.mynextbart.network.RouteInfoResponse
+import com.rst.mynextbart.network.Station
+import com.rst.mynextbart.network.Root
 
 class BartRepository {
     private val bartService = RetrofitClient.bartService
@@ -26,8 +28,33 @@ class BartRepository {
         "ROUTE 8" to "8"  // Daly City - Richmond
     )
     
-    suspend fun getDepartures(station: String): BartApiResponse {
-        return bartService.getRealTimeEstimates(station = station)
+    suspend fun getDepartures(stationCode: String): BartApiResponse {
+        try {
+            val response = bartService.getRealTimeEstimates(station = stationCode)
+            
+            // Check for API error message
+            if (response.root.message?.warning?.contains("No data matched your criteria") == true) {
+                // Return a valid response with null ETD
+                return BartApiResponse(
+                    root = Root(
+                        station = listOf(
+                            Station(
+                                name = stations.find { it.first == stationCode }?.second ?: stationCode,
+                                abbr = stationCode,
+                                etd = emptyList()
+                            )
+                        ),
+                        date = response.root.date,
+                        time = response.root.time
+                    )
+                )
+            }
+            
+            return response
+        } catch (e: Exception) {
+            Log.e("BartRepository", "Error fetching departures", e)
+            throw e
+        }
     }
     
     // List of BART stations for the dropdown
