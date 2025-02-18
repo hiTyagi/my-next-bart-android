@@ -13,19 +13,7 @@ fun CommonScreen(
     content: @Composable () -> Unit
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.02f),
-                        MaterialTheme.colorScheme.background
-                    ),
-                    startY = 0f,
-                    endY = 0.25f * Float.POSITIVE_INFINITY
-                )
-            )
+        modifier = Modifier.fillMaxSize()
     ) {
         content()
     }
