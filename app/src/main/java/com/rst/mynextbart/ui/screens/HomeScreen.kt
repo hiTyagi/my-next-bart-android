@@ -107,7 +107,7 @@ fun HomeScreen(
                             lastRefreshTime = viewModel.lastRouteRefreshTime,
                             onRefresh = {
                                 viewModel.refreshPinnedRoutes()
-                                routeRefreshTrigger++ // Reset only route auto-refresh timer
+                                routeRefreshTrigger++
                             }
                         )
                     }
@@ -122,9 +122,13 @@ fun HomeScreen(
                             onUnpin = {
                                 viewModel.togglePinRoute(route)
                                 Toast.makeText(context, "Route unpinned", Toast.LENGTH_SHORT).show()
+                            },
+                            onClick = {
+                                onStationClick(route.fromStation, route.fromStationName)
                             }
                         )
                     }
+                    item { Spacer(modifier = Modifier.height(16.dp)) }
                 }
 
                 // Pinned Stations section
@@ -145,9 +149,11 @@ fun HomeScreen(
                     ) { station ->
                         PinnedStationCard(
                             station = station,
-                            stationAddress = viewModel.getStationAddress(station.code),
-                            departures = viewModel.stationDeparturesState[station.code],
-                            onUnpin = {
+                            departures = viewModel.stationDeparturesState[station.code] ?: DeparturesState.Loading,
+                            onSelect = {
+                                onStationClick(station.code, station.name)
+                            },
+                            onTogglePin = {
                                 viewModel.toggleStationPin(station)
                                 Toast.makeText(context, "Station unpinned", Toast.LENGTH_SHORT).show()
                             }
@@ -254,14 +260,12 @@ fun StationDetailsCard(
 @Composable
 fun PinnedStationCard(
     station: FavoriteStation,
-    stationAddress: String,
-    departures: DeparturesState?,
-    onUnpin: () -> Unit
+    departures: DeparturesState,
+    onSelect: () -> Unit,
+    onTogglePin: () -> Unit
 ) {
-    LaunchedEffect(departures) {
-        Log.d("PinnedStationCard", "Departures for ${station.name}: ${departures?.javaClass?.simpleName}")
-    }
     Card(
+        onClick = onSelect,
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
@@ -279,27 +283,18 @@ fun PinnedStationCard(
         )
     ) {
         Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth()
+            modifier = Modifier.padding(16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = station.name.toString(),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = stationAddress,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(onClick = onUnpin) {
+                Text(
+                    text = station.name,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                IconButton(onClick = onTogglePin) {
                     Icon(
                         imageVector = Icons.Filled.PushPin,
                         contentDescription = "Unpin station",
@@ -320,95 +315,109 @@ fun PinnedStationCard(
                     }
                 }
                 is DeparturesState.Success -> {
-                    // Group departures by destination and take latest 2 from each
-                    val departuresByDestination = departures.data.root.station
-                        .firstOrNull()?.etd
-                        ?.map { etd ->
-                            etd.destination to etd.estimate
-                                .sortedBy { 
-                                    if (it.minutes == "Leaving") -1
-                                    else it.minutes.toIntOrNull() ?: Int.MAX_VALUE
-                                }
-                                .take(2)
-                                .map { estimate ->
-                                    DepartureInfo(
-                                        destination = etd.destination,
-                                        estimate = estimate
-                                    )
-                                }
-                        }
-                        ?.filter { (_, estimates) -> estimates.isNotEmpty() }
-
-                    if (!departuresByDestination.isNullOrEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        departuresByDestination.forEach { (destination, departures) ->
-                            // Add destination header
-                            Text(
-                                text = "To $destination",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                            
-                            // Show departures for this destination
-                            departures.forEach { departure ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Canvas(modifier = Modifier.size(12.dp)) {
-                                            drawCircle(color = ColorUtils.parseHexColor(departure.estimate.hexColor))
-                                        }
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Text(
-                                                text = TimeUtils.formatDepartureTime(departure.estimate.minutes).toString(),
-                                                style = MaterialTheme.typography.bodyMedium
-                                            )
-                                            Text(
-                                                text = "[${TimeUtils.getArrivalTime(departure.estimate.minutes)}]",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                    Text(
-                                        text = "${departure.estimate.length} cars",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                            }
-                            
-                            // Add space between destinations
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    } else {
+                    val station = departures.data.root.station.firstOrNull()
+                    if (station == null || station.etd.isNullOrEmpty()) {
                         Text(
-                            text = "No upcoming trains".toString(),
+                            text = "No trains currently scheduled",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp)
                         )
+                    } else {
+                        // Group departures by destination and take latest 2 from each
+                        val departuresByDestination = station.etd
+                            .map { etd ->
+                                etd.destination to etd.estimate
+                                    .sortedBy { 
+                                        if (it.minutes == "Leaving") -1
+                                        else it.minutes.toIntOrNull() ?: Int.MAX_VALUE
+                                    }
+                                    .take(2)
+                                    .map { estimate ->
+                                        DepartureInfo(
+                                            destination = etd.destination,
+                                            estimate = estimate
+                                        )
+                                    }
+                            }
+                            .filter { (_, estimates) -> estimates.isNotEmpty() }
+
+                        if (!departuresByDestination.isNullOrEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            departuresByDestination.forEach { (destination, departures) ->
+                                // Add destination header
+                                Text(
+                                    text = "To $destination",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                                
+                                // Show departures for this destination
+                                departures.forEach { departure ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Canvas(modifier = Modifier.size(12.dp)) {
+                                                drawCircle(color = ColorUtils.parseHexColor(departure.estimate.hexColor))
+                                            }
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = TimeUtils.formatDepartureTime(departure.estimate.minutes).toString(),
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                                Text(
+                                                    text = "[${TimeUtils.getArrivalTime(departure.estimate.minutes)}]",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                        Text(
+                                            text = "${departure.estimate.length} cars",
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                }
+                                
+                                // Add space between destinations
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        } else {
+                            Text(
+                                text = "No upcoming trains",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
                 is DeparturesState.Error -> {
-                    Text(
-                        text = departures.message.toString(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                null -> {
-                    Text(
-                        text = "Loading departures...".toString(),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    if (departures.message.contains("required etd missing") || 
+                        departures.message.contains("missing at $.root.station")) {
+                        Text(
+                            text = "No trains currently scheduled",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    } else {
+                        Text(
+                            text = departures.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
                 }
             }
         }
@@ -419,7 +428,8 @@ fun PinnedStationCard(
 fun PinnedRouteCard(
     route: FavoriteRoute,
     departures: DeparturesState?,
-    onUnpin: () -> Unit
+    onUnpin: () -> Unit,
+    onClick: () -> Unit
 ) {
     // Add logging for individual route card state
     LaunchedEffect(departures) {
@@ -427,6 +437,7 @@ fun PinnedRouteCard(
     }
 
     Card(
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
@@ -493,97 +504,115 @@ fun PinnedRouteCard(
                     }
                 }
                 is DeparturesState.Success -> {
-                    // Group departures by destination and take latest 2 from each
-                    val departuresByDestination = departures.data.root.station
-                        .firstOrNull()?.etd
-                        ?.map { etd ->
-                            etd.destination to etd.estimate
-                                .sortedBy { 
-                                    if (it.minutes == "Leaving") -1
-                                    else it.minutes.toIntOrNull() ?: Int.MAX_VALUE
-                                }
-                                .take(2)
-                                .map { estimate ->
-                                    DepartureInfo(
-                                        destination = etd.destination,
-                                        estimate = estimate
-                                    )
-                                }
-                        }
-                        ?.filter { (_, estimates) -> estimates.isNotEmpty() }
-
-                    if (!departuresByDestination.isNullOrEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        departuresByDestination.forEach { (destination, departures) ->
-                            // Add destination header
-                            Text(
-                                text = "To $destination",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                            
-                            // Show departures for this destination
-                            departures.forEach { departureInfo ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        // Color indicator
-                                        Canvas(modifier = Modifier.size(12.dp)) {
-                                            val color = ColorUtils.parseHexColor(departureInfo.estimate.hexColor)
-                                            drawCircle(color = color)
-                                        }
-                                        
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Text(
-                                                text = TimeUtils.formatDepartureTime(departureInfo.estimate.minutes).toString(),
-                                                style = MaterialTheme.typography.bodyMedium
-                                            )
-                                            Text(
-                                                text = "[${TimeUtils.getArrivalTime(departureInfo.estimate.minutes)}]",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                    Text(
-                                        text = "${departureInfo.estimate.length} cars",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                            }
-                            
-                            // Add space between destinations
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    } else {
+                    val station = departures.data.root.station.firstOrNull()
+                    if (station == null || station.etd.isNullOrEmpty()) {
                         Text(
-                            text = "No upcoming trains for this route",
+                            text = "No trains currently scheduled",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp)
                         )
+                    } else {
+                        // Group departures by destination and take latest 2 from each
+                        val departuresByDestination = station.etd
+                            .map { etd ->
+                                etd.destination to etd.estimate
+                                    .sortedBy { 
+                                        if (it.minutes == "Leaving") -1
+                                        else it.minutes.toIntOrNull() ?: Int.MAX_VALUE
+                                    }
+                                    .take(2)
+                                    .map { estimate ->
+                                        DepartureInfo(
+                                            destination = etd.destination,
+                                            estimate = estimate
+                                        )
+                                    }
+                            }
+                            .filter { (_, estimates) -> estimates.isNotEmpty() }
+
+                        if (!departuresByDestination.isNullOrEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            departuresByDestination.forEach { (destination, departures) ->
+                                // Add destination header
+                                Text(
+                                    text = "To $destination",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                                
+                                // Show departures for this destination
+                                departures.forEach { departure ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Canvas(modifier = Modifier.size(12.dp)) {
+                                                drawCircle(color = ColorUtils.parseHexColor(departure.estimate.hexColor))
+                                            }
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = TimeUtils.formatDepartureTime(departure.estimate.minutes).toString(),
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                                Text(
+                                                    text = "[${TimeUtils.getArrivalTime(departure.estimate.minutes)}]",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                        Text(
+                                            text = "${departure.estimate.length} cars",
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                }
+                                
+                                // Add space between destinations
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        } else {
+                            Text(
+                                text = "No upcoming trains for this route",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
                 is DeparturesState.Error -> {
-                    Text(
-                        text = departures.message.toString(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    if (departures.message.contains("required etd missing") || 
+                        departures.message.contains("missing at $.root.station")) {
+                        Text(
+                            text = "No trains currently scheduled",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    } else {
+                        Text(
+                            text = departures.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
                 }
                 null -> {
                     Text(
                         text = "Loading departures...",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 8.dp)
                     )
                 }
             }

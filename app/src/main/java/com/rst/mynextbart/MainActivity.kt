@@ -79,36 +79,10 @@ fun MainScreen(viewModel: BartViewModel) {
         .collectAsState(initial = NavDestination.Home.route)
     
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { 
-                    Text(
-                        text = when (currentRoute) {
-                            NavDestination.Home.route -> "MyNextBART"
-                            NavDestination.Favorites.route -> "Favorite Stations"
-                            NavDestination.FavoriteRoutes.route -> "Favorite Routes"
-                            NavDestination.Explore.route -> "Explore"
-                            else -> "MyNextBART"
-                        },
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            shadow = Shadow(
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                offset = Offset(0f, 1f),
-                                blurRadius = 2f
-                            )
-                        )
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,  // Make TopAppBar transparent
-                    titleContentColor = MaterialTheme.colorScheme.onBackground
-                )
-            )
-        },
         bottomBar = {
             NavigationBar(
                 modifier = Modifier.fillMaxWidth(),
-                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)  // Slightly transparent nav bar
+                containerColor = MaterialTheme.colorScheme.surface
             ) {
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
@@ -146,7 +120,7 @@ fun MainScreen(viewModel: BartViewModel) {
                 )
             }
         },
-        containerColor = Color.Transparent
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         NavHost(
             navController = navController,

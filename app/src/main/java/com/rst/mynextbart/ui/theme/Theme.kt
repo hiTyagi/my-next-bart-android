@@ -14,25 +14,23 @@ import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
     primary = Color(0xFF64B5F6),      // Lighter Blue
-    onPrimary = Color(0xFF002171),
-    primaryContainer = Color(0xFF1976D2),
-    onPrimaryContainer = Color(0xFFE3F2FD),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFF1A1C1E),
+    onPrimaryContainer = Color.White,
 
     secondary = Color(0xFF4DD0E1),    // Lighter Cyan
-    secondaryContainer = Color(0xFF00838F),
-    onSecondaryContainer = Color(0xFFE0F7FA),
+    secondaryContainer = Color(0xFF1A1C1E),
+    onSecondaryContainer = Color.White,
 
-    surface = Color(0xFF1A1C1E),
+    surface = Color(0xFF1A1C1E),      // Dark surface
     surfaceVariant = Color(0xFF26282B),
-    onSurface = Color(0xFFE1E3E6),
-    onSurfaceVariant = Color(0xFFBEC2C6),
+    onSurface = Color.White,
+    onSurfaceVariant = Color.White.copy(alpha = 0.7f),
 
-    background = Color(0xFF121212),
-    onBackground = Color(0xFFE1E3E6),
+    background = Color(0xFF121212),    // Dark background
+    onBackground = Color.White,
 
-    error = Color(0xFFEF5350),
-    errorContainer = Color(0xFF442726),
-    onError = Color.White
+    error = Color(0xFFEF5350)
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -62,15 +60,15 @@ private val LightColorScheme = lightColorScheme(
 fun MyNextBARTTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (darkTheme) dynamicDarkColorScheme(context)
+            else dynamicLightColorScheme(context)
         }
-
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }

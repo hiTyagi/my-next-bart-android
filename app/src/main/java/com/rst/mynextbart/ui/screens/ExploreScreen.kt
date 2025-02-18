@@ -1,7 +1,9 @@
 package com.rst.mynextbart.ui.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,6 +39,18 @@ fun StationDetailsCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 4.dp,
+            pressedElevation = 8.dp
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+        )
     ) {
         Column(
             modifier = Modifier
@@ -128,16 +142,6 @@ fun ExploreScreen(
             }
         }
 
-        // Add back button to top bar
-        TopAppBar(
-            title = { Text("Explore Stations") },
-            navigationIcon = {
-                IconButton(onClick = onBackClick) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                }
-            }
-        )
-        
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -155,12 +159,17 @@ fun ExploreScreen(
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                     modifier = Modifier
                         .menuAnchor()
-                        .fillMaxWidth()
+                        .fillMaxWidth(),
+                    colors = TextFieldDefaults.colors(
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedContainerColor = MaterialTheme.colorScheme.surface
+                    )
                 )
                 
                 ExposedDropdownMenu(
                     expanded = expanded,
-                    onDismissRequest = { expanded = false }
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.background(MaterialTheme.colorScheme.surface)
                 ) {
                     viewModel.stations.forEach { (code, name) ->
                         DropdownMenuItem(
@@ -212,29 +221,54 @@ fun ExploreScreen(
                     }
                 }
                 is DeparturesState.Success -> {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        state.data.root.station.forEach { station ->
-                            station.etd.forEach { etd ->
-                                items<Estimate>(
-                                    items = etd.estimate,
-                                    key = { estimate -> "${etd.destination}_${estimate.minutes}_${estimate.platform}" }
-                                ) { estimate ->
-                                    DepartureItem(
-                                        destination = etd.destination,
-                                        estimate = estimate
-                                    )
+                    val validStations = state.data.root.station.filter { station ->
+                        station.etd != null && station.etd.isNotEmpty()
+                    }
+                    
+                    if (validStations.isEmpty()) {
+                        Text(
+                            text = "No trains currently scheduled",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            validStations.forEach { station ->
+                                station.etd.forEach { etd ->
+                                    items<Estimate>(
+                                        items = etd.estimate,
+                                        key = { estimate -> "${etd.destination}_${estimate.minutes}_${estimate.platform}" }
+                                    ) { estimate ->
+                                        DepartureItem(
+                                            destination = etd.destination,
+                                            estimate = estimate
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
                 is DeparturesState.Error -> {
-                    Text(
-                        text = "Error: ${state.message}",
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    if (state.message.contains("required etd missing") || 
+                        state.message.contains("missing at $.root.station")) {
+                        Text(
+                            text = "No trains currently scheduled",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    } else {
+                        Text(
+                            text = state.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
                 }
             }
         }
