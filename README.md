@@ -42,3 +42,6 @@ A modern Android app that helps you navigate the Bay Area Rapid Transit (BART) s
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. 
+
+## BART API
+Special thanks to [BART APIs ](https://api.bart.gov/docs/overview/index.aspx)that made this project possible
