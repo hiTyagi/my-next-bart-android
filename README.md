@@ -18,19 +18,19 @@ A modern Android app that helps you navigate the Bay Area Rapid Transit (BART) s
 
 | Light Mode | Dark Mode |
 |------------|-----------|
-| ![Welcome Screen](screenshots/light_welcome.png) | ![Welcome Screen](screenshots/dark_welcome.png) |
-| ![Home Page](screenshots/light_home_page.png) | ![Home Page](screenshots/dark_home_page.png) |
-| ![Favorite Stations](screenshots/light_fav_stations.png) | ![Favorite Stations](screenshots/dark_fav_stations.png) |
-| ![Favorite Routes](screenshots/light_fav_routes.png) | ![Favorite Routes](screenshots/dark_fav_routes.png) |
-| ![Station Details](screenshots/light_station_details.png) | ![Station Details](screenshots/dark_station_details.png) |
-| ![Station Widget](screenshots/light_station_widget.png) | ![Station Widget](screenshots/dark_station_widget.png) |
-| ![Route Widget](screenshots/light_route_widget.png) | ![Route Widget](screenshots/dark_route_widget.png) |
+| <img src="screenshots/light_welcome.png" width="248"> |  <img src="screenshots/dark_welcome.png" width="248"> |
+| <img src="screenshots/light_home_page.png" width="248"> | <img src="screenshots/dark_home_page.png" width="248">|
+| <img src="screenshots/light_fav_stations.png" width="248"> | <img src="screenshots/dark_fav_stations.png" width="248"> |
+| <img src="screenshots/light_fav_routes.png" width="248"> | <img src="screenshots/dark_fav_routes.png" width="248"> |
+| <img src="screenshots/light_station_details.png" width="248"> | <img src="screenshots/dark_station_details.png" width="248"> |
+| <img src="screenshots/light_station_widget.png" width="248"> | <img src="screenshots/dark_station_widget.png" width="248"> |
+| <img src="screenshots/light_route_widget.png" width="248"> | <img src="screenshots/dark_route_widget.png" width="248"> |
 
 
 ## Widget Settings
 | Widget Preference | Widget Settings |
 |------------|-----------|
-![Widget Preference](screenshots/light_station_widget_selection.png) | ![Widget Settings](screenshots/light_station_widget_settings.png) |
+| <img src="screenshots/light_station_widget_selection.png" width="248"> | <img src="screenshots/light_station_widget_settings.png" width="248"> |
 
 ## 🚀 Getting Started
 
